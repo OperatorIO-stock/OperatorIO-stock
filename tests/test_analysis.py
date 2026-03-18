@@ -25,3 +25,12 @@ def test_drawdown_metric_non_negative():
     prices[21] = PricePoint(timestamp=prices[21].timestamp, close=88)
     result = analyze_asset("TEST", prices)
     assert result.max_drawdown_pct >= 0
+
+
+from bot_analyzer.data import BinanceDataProvider
+
+
+def test_binance_symbol_normalization_supports_usd_variants() -> None:
+    assert BinanceDataProvider._normalize_symbol("BTC-USD") == "BTCUSDT"
+    assert BinanceDataProvider._normalize_symbol("eth/usd") == "ETHUSDT"
+    assert BinanceDataProvider._normalize_symbol("SOLUSDT") == "SOLUSDT"

@@ -22,6 +22,8 @@ class AssetAnalysis:
     sma20: float
     sma50: float
     momentum_14d_pct: float
+    cycle_position_pct: float
+    cycle_bias: str
     risk_level: str
     recommendation: str
     rationale: List[str]
@@ -41,6 +43,15 @@ def _max_drawdown_pct(closes: List[float]) -> float:
     return abs(max_dd) * 100
 
 
+def _cycle_position_pct(closes: List[float], lookback: int = 30) -> float:
+    window = closes[-lookback:]
+    low = min(window)
+    high = max(window)
+    if high == low:
+        return 50.0
+    return (window[-1] - low) / (high - low) * 100
+
+
 def analyze_asset(symbol: str, prices: List[PricePoint]) -> AssetAnalysis:
     closes = [p.close for p in prices]
     rets = _daily_returns(closes)
@@ -55,6 +66,7 @@ def analyze_asset(symbol: str, prices: List[PricePoint]) -> AssetAnalysis:
     sma20 = mean(closes[-20:])
     sma50 = mean(closes[-50:])
     momentum14 = (closes[-1] / closes[-15] - 1) * 100
+    cycle_position = _cycle_position_pct(closes)
 
     risk_points = 0
     rationale: List[str] = []
@@ -84,6 +96,17 @@ def analyze_asset(symbol: str, prices: List[PricePoint]) -> AssetAnalysis:
         risk_points += 1
         rationale.append("Тренд не подтвержден долгосрочно.")
 
+    if cycle_position >= 75:
+        cycle_bias = "cycle-top"
+        risk_points += 1
+        rationale.append("Цена находится в верхней части 30-дневного цикла: возможна фиксация прибыли.")
+    elif cycle_position <= 25:
+        cycle_bias = "cycle-bottom"
+        rationale.append("Цена находится в нижней части 30-дневного цикла: рынок ищет основание.")
+    else:
+        cycle_bias = "mid-cycle"
+        rationale.append("Цена находится в середине 30-дневного цикла без экстремума.")
+
     if risk_points <= 1:
         risk_level = "LOW"
     elif risk_points <= 3:
@@ -91,9 +114,9 @@ def analyze_asset(symbol: str, prices: List[PricePoint]) -> AssetAnalysis:
     else:
         risk_level = "HIGH"
 
-    if trend_positive and momentum14 > 0 and risk_level != "HIGH":
+    if trend_positive and momentum14 > 0 and risk_level != "HIGH" and cycle_position < 85:
         recommendation = "BUY"
-        rationale.append("Импульс и тренд поддерживают сценарий покупки.")
+        rationale.append("Импульс, тренд и цикл поддерживают сценарий покупки.")
     elif risk_level == "HIGH" or period_return < -10:
         recommendation = "AVOID"
         rationale.append("Риск/доходность не в пользу входа сейчас.")
@@ -111,6 +134,8 @@ def analyze_asset(symbol: str, prices: List[PricePoint]) -> AssetAnalysis:
         sma20=sma20,
         sma50=sma50,
         momentum_14d_pct=momentum14,
+        cycle_position_pct=cycle_position,
+        cycle_bias=cycle_bias,
         risk_level=risk_level,
         recommendation=recommendation,
         rationale=rationale,

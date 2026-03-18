@@ -1,9 +1,10 @@
 # Investment Analyst Bot (Python)
 
-Бот для анализа акций и криптомонет в стиле профессионального аналитика.
+Бот для анализа криптовалют в стиле профессионального аналитика.
 
 ## Что умеет
-- Загружает историю цен из Yahoo Finance API (без API-ключа).
+- Загружает историю цен из Binance API (без API-ключа).
+- Добавляет небольшую задержку между HTTP-запросами, чтобы не спамить API.
 - Считает ключевые метрики:
   - доходность за период;
   - волатильность (годовая);
@@ -25,12 +26,12 @@ pip install -r requirements.txt
 
 ## Запуск
 ```bash
-python -m bot_analyzer.main --symbols AAPL MSFT BTC-USD ETH-USD --period 6mo
+python -m bot_analyzer.main --symbols BTCUSDT ETHUSDT SOLUSDT --period 6mo
 ```
 
 Пример сохранения отчета в файл:
 ```bash
-python -m bot_analyzer.main --symbols AAPL BTC-USD --period 1y --output report.txt
+python -m bot_analyzer.main --symbols BTCUSDT ETH-USD --period 1y --output report.txt
 ```
 
 ## Параметры
@@ -39,6 +40,6 @@ python -m bot_analyzer.main --symbols AAPL BTC-USD --period 1y --output report.t
 - `--output` путь к файлу для сохранения отчета.
 
 ## Примечания
-- Для акций используйте обычные тикеры (например, `AAPL`).
-- Для криптовалют обычно используются тикеры вида `BTC-USD`, `ETH-USD`.
+- Используйте торговые пары Binance, например `BTCUSDT`, `ETHUSDT`, `SOLUSDT`.
+- Форматы `BTC-USD`, `BTC/USD` и `BTCUSD` автоматически нормализуются в `BTCUSDT`.
 - Инструмент не дает инвестиционных гарантий; это аналитическая поддержка принятия решений.

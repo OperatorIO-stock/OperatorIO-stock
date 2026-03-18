@@ -5,19 +5,19 @@ import sys
 from pathlib import Path
 
 from .analysis import analyze_asset
-from .data import DataLoadError, YahooFinanceDataProvider
+from .data import BinanceDataProvider, DataLoadError
 from .report import build_report
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Бот-аналитик акций и криптомонет с оценкой рисков."
+        description="Бот-аналитик криптовалют с оценкой рисков."
     )
     parser.add_argument(
         "--symbols",
         nargs="+",
         required=True,
-        help="Список тикеров (например: AAPL MSFT BTC-USD ETH-USD)",
+        help="Список символов Binance (например: BTCUSDT ETHUSDT BTC-USD)",
     )
     parser.add_argument(
         "--period",
@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    provider = YahooFinanceDataProvider()
+    provider = BinanceDataProvider()
 
     analyses = []
     failed = []

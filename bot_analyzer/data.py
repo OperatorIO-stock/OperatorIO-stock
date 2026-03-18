@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from time import sleep
 from typing import List
 
 import json
@@ -10,7 +11,7 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 
 
-YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 
 
 @dataclass
@@ -23,29 +24,38 @@ class DataLoadError(RuntimeError):
     """Raised when market data cannot be loaded."""
 
 
-class YahooFinanceDataProvider:
-    """Simple market data provider via Yahoo Finance chart endpoint."""
+class BinanceDataProvider:
+    """Market data provider via Binance kline endpoint."""
 
-    PERIOD_TO_RANGE = {
-        "1mo": "1mo",
-        "3mo": "3mo",
-        "6mo": "6mo",
-        "1y": "1y",
-        "2y": "2y",
-        "5y": "5y",
+    PERIOD_TO_LIMIT = {
+        "1mo": 30,
+        "3mo": 90,
+        "6mo": 180,
+        "1y": 365,
+        "2y": 730,
+        "5y": 1000,
     }
 
-    def __init__(self, timeout_seconds: int = 10) -> None:
+    def __init__(self, timeout_seconds: int = 10, request_delay_seconds: float = 0.2) -> None:
         self.timeout_seconds = timeout_seconds
+        self.request_delay_seconds = request_delay_seconds
 
     def fetch_close_prices(self, symbol: str, period: str) -> List[PricePoint]:
-        if period not in self.PERIOD_TO_RANGE:
+        if period not in self.PERIOD_TO_LIMIT:
             raise ValueError(f"Unsupported period '{period}'.")
 
-        query = urlencode({"range": self.PERIOD_TO_RANGE[period], "interval": "1d"})
-        url = f"{YAHOO_CHART_URL.format(symbol=symbol)}?{query}"
+        normalized_symbol = self._normalize_symbol(symbol)
+        query = urlencode(
+            {
+                "symbol": normalized_symbol,
+                "interval": "1d",
+                "limit": self.PERIOD_TO_LIMIT[period],
+            }
+        )
+        url = f"{BINANCE_KLINES_URL}?{query}"
 
         try:
+            sleep(self.request_delay_seconds)
             with urlopen(url, timeout=self.timeout_seconds) as response:
                 if response.status != 200:
                     raise DataLoadError(f"HTTP {response.status} for symbol {symbol}.")
@@ -54,29 +64,17 @@ class YahooFinanceDataProvider:
             raise DataLoadError(f"HTTP {exc.code} for symbol {symbol}.") from exc
         except URLError as exc:
             raise DataLoadError(f"Network error for symbol {symbol}: {exc.reason}") from exc
-        result = payload.get("chart", {}).get("result")
-        if not result:
-            error = payload.get("chart", {}).get("error")
-            raise DataLoadError(f"No data for {symbol}: {error or 'unknown error'}")
 
-        entry = result[0]
-        timestamps = entry.get("timestamp") or []
-        closes = (
-            entry.get("indicators", {})
-            .get("quote", [{}])[0]
-            .get("close", [])
-        )
+        if isinstance(payload, dict) and payload.get("code"):
+            raise DataLoadError(payload.get("msg", f"No data for {symbol}."))
 
-        points: List[PricePoint] = []
-        for ts, close in zip(timestamps, closes):
-            if close is None:
-                continue
-            points.append(
-                PricePoint(
-                    timestamp=datetime.fromtimestamp(ts, tz=timezone.utc),
-                    close=float(close),
-                )
+        points = [
+            PricePoint(
+                timestamp=datetime.fromtimestamp(entry[0] / 1000, tz=timezone.utc),
+                close=float(entry[4]),
             )
+            for entry in payload
+        ]
 
         if len(points) < 30:
             raise DataLoadError(
@@ -84,3 +82,10 @@ class YahooFinanceDataProvider:
             )
 
         return points
+
+    @staticmethod
+    def _normalize_symbol(symbol: str) -> str:
+        cleaned = symbol.replace("-", "").replace("/", "").upper()
+        if cleaned.endswith("USD") and not cleaned.endswith("USDT"):
+            return f"{cleaned[:-3]}USDT"
+        return cleaned
